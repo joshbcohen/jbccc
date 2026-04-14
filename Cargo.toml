@@ -2,6 +2,7 @@
 name = "jbccc"
 version = "0.1.0"
 edition = "2024"
+description = "Joshua B. Cohen's C Compiler"
 
 [dependencies]
 clap = { version = "4.6.0", features = ["derive"] }
