@@ -9,13 +9,21 @@ use clap::Parser;
 #[command(version, about, long_about = None)]
 struct Cli {
     c_filename: String,
-    #[arg(short, long)]
+    #[arg(short, long, help = "Run the lexer only.")]
     lex: bool,
-    #[arg(short, long)]
+    #[arg(short, long, help = "Run the lexer and parser.")]
     parse: bool,
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        help = "Run the lexer, parser, and assembly AST generator."
+    )]
     codegen: bool,
-    #[arg(short = 'S', long)]
+    #[arg(
+        short = 'S',
+        long,
+        help = "Run all compiler steps besides assembler, generating a file at <C_FILENAME>.s."
+    )]
     emit_assembly: bool,
 }
 
