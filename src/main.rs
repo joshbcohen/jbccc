@@ -32,6 +32,7 @@ fn compile(_preprocessed_path: &str, _assembly_path: &str, _mode: CompilerMode) 
     Ok(())
 }
 
+/// Helper function to create path strings given the input C file path to the compiler and an extension
 fn extract_path_str_from_pathbuf(mut path_buf: PathBuf, extension: &str) -> Result<String> {
     if !path_buf.add_extension(extension) {
         bail!(format!(
@@ -45,6 +46,7 @@ fn extract_path_str_from_pathbuf(mut path_buf: PathBuf, extension: &str) -> Resu
     Ok(pb_path_str.to_string())
 }
 
+/// Helper function to run external commands that the compiler driver needs (i.e. preprocessor, linker)
 fn run_command(cmd: &mut Command, cmd_str: &str) -> Result<()> {
     let cmd_out = cmd.output();
     match cmd_out {
@@ -88,15 +90,12 @@ fn main() -> Result<()> {
     };
     let c_executable_path = c_parent.join(c_base);
     let preprocessed_path = extract_path_str_from_pathbuf(c_executable_path.clone(), "i")?;
-    let preprocessed_path_str = &preprocessed_path[..];
     let executable_path = extract_path_str_from_pathbuf(c_executable_path.clone(), "")?;
-    let executable_path_str = &executable_path[..];
     let assembly_path = extract_path_str_from_pathbuf(c_executable_path.clone(), "s")?;
-    let assembly_path_str = &assembly_path[..];
 
     // Run the preprocessor
     let mut preprocess_out = Command::new("gcc");
-    preprocess_out.args(["-E", "-P", c_filename, "-o", preprocessed_path_str]);
+    preprocess_out.args(["-E", "-P", c_filename, "-o", &preprocessed_path]);
     run_command(&mut preprocess_out, "preprocessor")?;
 
     let compiler_mode = if cli.emit_assembly {
@@ -111,14 +110,14 @@ fn main() -> Result<()> {
         CompilerMode::Full
     };
 
-    compile(&preprocessed_path_str, &assembly_path_str, compiler_mode)?;
-    remove_file(preprocessed_path_str)?;
+    compile(&preprocessed_path, &assembly_path, compiler_mode)?;
+    remove_file(preprocessed_path)?;
 
     if let CompilerMode::Full = compiler_mode {
         let mut link_out = Command::new("gcc");
-        link_out.args([&assembly_path_str, "-o", executable_path_str]);
+        link_out.args([&assembly_path, "-o", &executable_path]);
         run_command(&mut link_out, "linker")?;
-        remove_file(assembly_path_str)?;
+        remove_file(assembly_path)?;
     }
     Ok(())
 }
