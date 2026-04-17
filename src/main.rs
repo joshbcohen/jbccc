@@ -1,5 +1,5 @@
 use std::fs::remove_file;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Result, bail, ensure};
@@ -32,6 +32,37 @@ fn compile(_preprocessed_path: &str, _assembly_path: &str, _mode: CompilerMode) 
     Ok(())
 }
 
+fn extract_path_str_from_pathbuf(mut path_buf: PathBuf, extension: &str) -> Result<String> {
+    if !path_buf.add_extension(extension) {
+        bail!(format!(
+            "Unable to create filename from path: {:?}, {}",
+            path_buf, extension
+        ))
+    }
+    let Some(pb_path_str) = path_buf.to_str() else {
+        bail!(format!("Unable to extract path string: {:?}", path_buf))
+    };
+    Ok(pb_path_str.to_string())
+}
+
+fn run_command(cmd: &mut Command, cmd_str: &str) -> Result<()> {
+    let cmd_out = cmd.output();
+    match cmd_out {
+        Ok(out) => {
+            ensure!(
+                out.status.success(),
+                format!(
+                    "Error running {}: {}",
+                    cmd_str,
+                    String::from_utf8_lossy(&out.stderr)
+                )
+            );
+            return Ok(());
+        }
+        Err(err) => bail!(format!("Error running {}}: {}", cmd_str, err)),
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let c_filename = &cli.c_filename;
@@ -56,50 +87,17 @@ fn main() -> Result<()> {
         ))
     };
     let c_executable_path = c_parent.join(c_base);
-    let mut preprocessed_path = c_executable_path.clone();
-    if !preprocessed_path.add_extension("i") {
-        bail!(format!(
-            "Unable to create preprocessed filename: {:?}",
-            preprocessed_path
-        ))
-    }
-    let mut assembly_path = c_executable_path.clone();
-    if !assembly_path.add_extension("s") {
-        bail!(format!(
-            "Unable to create assembly filename: {:?}",
-            assembly_path
-        ))
-    }
-    let Some(preprocessed_path_str) = preprocessed_path.to_str() else {
-        bail!(format!("Unable to extract preprocessed_path string: {:?}", preprocessed_path))
-    };
-    let Some(assembly_path_str) = assembly_path.to_str() else {
-        bail!(format!(
-            "Unable to extract assembly_path string: {:?}",
-            assembly_path
-        ))
-    };
-    let Some(executable_path_str) = c_executable_path.to_str() else {
-        bail!(format!(
-            "Unable to extract executable_path string: {:?}",
-            c_executable_path
-        ))       
-    };
+    let preprocessed_path = extract_path_str_from_pathbuf(c_executable_path.clone(), "i")?;
+    let preprocessed_path_str = &preprocessed_path[..];
+    let executable_path = extract_path_str_from_pathbuf(c_executable_path.clone(), "")?;
+    let executable_path_str = &executable_path[..];
+    let assembly_path = extract_path_str_from_pathbuf(c_executable_path.clone(), "s")?;
+    let assembly_path_str = &assembly_path[..];
 
     // Run the preprocessor
-    let preprocess_out = Command::new("gcc")
-        .args(["-E", "-P", c_filename, "-o", preprocessed_path_str])
-        .output();
-    match preprocess_out {
-        Ok(out) => ensure!(
-            out.status.success(),
-            format!(
-                "Error running preprocessor: {}",
-                String::from_utf8_lossy(&out.stderr)
-            )
-        ),
-        Err(err) => bail!(format!("Error running preprocessor: {}", err)),
-    }
+    let mut preprocess_out = Command::new("gcc");
+    preprocess_out.args(["-E", "-P", c_filename, "-o", preprocessed_path_str]);
+    run_command(&mut preprocess_out, "preprocessor")?;
 
     let compiler_mode = if cli.emit_assembly {
         CompilerMode::CodeEmit
@@ -113,23 +111,13 @@ fn main() -> Result<()> {
         CompilerMode::Full
     };
 
-    compile(preprocessed_path_str, assembly_path_str, compiler_mode)?;
+    compile(&preprocessed_path_str, &assembly_path_str, compiler_mode)?;
     remove_file(preprocessed_path_str)?;
 
     if let CompilerMode::Full = compiler_mode {
-        let link_out = Command::new("gcc")
-            .args([assembly_path_str, "-o", executable_path_str])
-            .output();
-        match link_out {
-            Ok(out) => ensure!(
-                out.status.success(),
-                format!(
-                    "Error running linker: {}",
-                    String::from_utf8_lossy(&out.stderr)
-                )
-            ),
-            Err(err) => bail!(format!("Error running preprocessor: {}", err)),
-        }
+        let mut link_out = Command::new("gcc");
+        link_out.args([&assembly_path_str, "-o", executable_path_str]);
+        run_command(&mut link_out, "linker")?;
         remove_file(assembly_path_str)?;
     }
     Ok(())
