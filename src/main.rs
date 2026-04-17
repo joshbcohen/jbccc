@@ -59,7 +59,7 @@ fn run_command(cmd: &mut Command, cmd_str: &str) -> Result<()> {
             );
             return Ok(());
         }
-        Err(err) => bail!(format!("Error running {}}: {}", cmd_str, err)),
+        Err(err) => bail!(format!("Error running {}: {}", cmd_str, err)),
     }
 }
 
